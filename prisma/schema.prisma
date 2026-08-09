@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProviderType {
+  UNISENDER_GO
+}
+
+enum CampaignStatus {
+  DRAFT
+  READY
+  RUNNING
+  PAUSED
+  DONE
+  FAILED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  FAILED
+  BOUNCED
+  SPAM
+  UNSUBSCRIBED
+  SKIPPED
+}
+
+model Provider {
+  id              String       @id @default(cuid())
+  type            ProviderType @default(UNISENDER_GO)
+  name            String       @default("Unisender Go")
+  apiKey          String
+  apiUrl          String       @default("https://goapi.unisender.ru/ru/transactional/api/v1")
+  fromEmail       String
+  fromName        String       @default("")
+  replyTo         String?
+  /// Backend ID домена ссылок (Unisender → Домены ссылок), напр. 37085 для email.websitesharing.ru
+  customBackendId Int?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  campaigns       Campaign[]
+}
+
+model Campaign {
+  id           String         @id @default(cuid())
+  name         String
+  subject      String         @default("")
+  bodyHtml     String         @default("")
+  bodyText     String         @default("")
+  status       CampaignStatus @default(DRAFT)
+  batchSize    Int            @default(10)
+  delayMs      Int            @default(1000)
+  errorMessage String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  providerId String?
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  recipients Recipient[]
+}
+
+model Recipient {
+  id             String          @id @default(cuid())
+  email          String
+  label          String?
+  status         RecipientStatus @default(PENDING)
+  error          String?
+  providerJobId  String?
+  deliveryStatus String?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  openedAt       DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, email])
+  @@index([campaignId, status])
+  @@index([providerJobId])
+  @@index([email])
+}

@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mail Orchestrator
 
-## Getting Started
+Личный оркестратор email-рассылок через Unisender Go.
 
-First, run the development server:
+## Стек
+
+- **Next.js** — UI + Server Actions
+- **PostgreSQL** — кампании, получатели, статусы
+- **Worker** — отдельный Node-процесс, шлёт батчами с паузой
+- **Docker Compose** — db / app / worker
+
+## Быстрый старт (локально)
+
+1. Скопируйте env:
+
+```bash
+cp .env.example .env
+```
+
+2. Поднимите Postgres:
+
+```bash
+docker compose up -d db
+```
+
+> На Windows часто уже заняты порты 5432/5433 локальным Postgres — в `docker-compose` БД проброшена на **5434**.
+
+3. Миграции и зависимости:
+
+```bash
+npm install
+npx prisma migrate dev --name init
+```
+
+4. Два терминала:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev:worker
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Откройте http://localhost:3000 — пароль из `APP_PASSWORD` (по умолчанию `changeme`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Полный Docker
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+docker compose up --build
+```
 
-## Learn More
+## Вебхук статусов
 
-To learn more about Next.js, take a look at the following resources:
+1. Пропиши публичный URL в `.env`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+APP_BASE_URL=https://your-domain.com
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Локально — через ngrok / cloudflare tunnel.
 
-## Deploy on Vercel
+2. **Провайдер → Зарегистрировать в Unisender**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Или вручную в кабинете Unisender Go → Вебхуки:
+- URL: `https://your-domain.com/api/webhooks/unisender`
+- Format: `json_post`
+- Events: sent, delivered, opened, clicked, bounced, spam…
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Поллинг UI обновляет страницу, пока идёт отправка или ждутся статусы доставки.

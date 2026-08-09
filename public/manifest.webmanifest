@@ -1,0 +1,18 @@
+{
+  "name": "Mail Orchestrator",
+  "short_name": "Mail",
+  "description": "Личный оркестратор email-рассылок",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f1ec",
+  "theme_color": "#1f6b5a",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

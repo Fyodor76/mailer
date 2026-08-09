@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mail
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mail}
+      POSTGRES_DB: mail_service
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mail -d mail_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  app:
+    image: mail-service:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://mail:${POSTGRES_PASSWORD:-mail}@db:5432/mail_service?schema=public
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && npm run start"
+    networks:
+      - internal
+
+  worker:
+    image: mail-service:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://mail:${POSTGRES_PASSWORD:-mail}@db:5432/mail_service?schema=public
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_started
+    command: sh -c "npx prisma generate && npm run worker"
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
