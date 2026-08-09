@@ -236,49 +236,40 @@ export function CampaignControls({
           />
         </label>
         <div className="field">
-          <div
-            className="row"
-            style={{ justifyContent: "space-between", alignItems: "baseline" }}
-          >
-            <span>HTML</span>
-            <div className="row" style={{ gap: "0.5rem" }}>
-              <input
-                ref={htmlFileRef}
-                type="file"
-                accept=".html,.htm,text/html"
-                hidden
-                disabled={!canEdit}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  void onHtmlFile(file);
-                  e.target.value = "";
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!canEdit}
-                onClick={() => htmlFileRef.current?.click()}
-                style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
-              >
-                Загрузить .html
-              </button>
-            </div>
+          <span>HTML</span>
+          <input
+            ref={htmlFileRef}
+            type="file"
+            accept=".html,.htm,text/html"
+            hidden
+            disabled={!canEdit}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              void onHtmlFile(file);
+              e.target.value = "";
+            }}
+          />
+          <div className="file-picker">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!canEdit}
+              onClick={() => htmlFileRef.current?.click()}
+            >
+              Загрузить .html
+            </button>
+            <span className="file-picker-name">
+              {htmlFileName ?? "Файл не выбран"}
+            </span>
           </div>
-          {htmlFileName ? (
-            <span className="muted" style={{ fontSize: "0.8rem" }}>
-              Файл: {htmlFileName}
-            </span>
-          ) : (
-            <span className="muted" style={{ fontSize: "0.8rem" }}>
-              Можно вставить код или загрузить файл .html / .htm
-            </span>
-          )}
+          <span className="muted" style={{ fontSize: "0.8rem" }}>
+            Файл .html / .htm подставит код в поле ниже. Можно и вручную.
+          </span>
           <textarea
             name="bodyHtml"
             value={letter.bodyHtml}
             disabled={!canEdit}
-            style={{ minHeight: 180 }}
+            style={{ minHeight: 180, marginTop: "0.5rem" }}
             placeholder="<p>Привет, {{to_name}}</p>"
             onChange={(e) => {
               setHtmlFileName(null);
