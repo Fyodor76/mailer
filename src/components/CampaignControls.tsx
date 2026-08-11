@@ -357,7 +357,7 @@ export function CampaignControls({
           accept=".xlsx,.xls,.csv"
           disabled={!canEdit}
           label="Excel"
-          hint="Колонка email или почта. В одной ячейке можно несколько адресов. Рядом — имя / компания."
+          hint="Колонка email или почта. Имя/компания не обязательны."
         />
         <label className="field">
           Или вставьте список
@@ -367,8 +367,14 @@ export function CampaignControls({
             disabled={!canEdit}
             value={listText}
             onChange={(e) => setListText(e.target.value)}
-            placeholder={"user@mail.com, Компания А\nother@mail.com"}
+            placeholder={
+              "fishouk@yandex.ru\nuser@mail.com\nother@mail.com, Компания А"
+            }
           />
+          <span className="muted" style={{ fontSize: "0.8rem" }}>
+            Один email на строку. Имя после запятой — по желанию (для{" "}
+            <code>{"{{to_name}}"}</code>).
+          </span>
         </label>
 
         {preview.recipients.length > 0 ? (
