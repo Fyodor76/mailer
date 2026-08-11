@@ -9,7 +9,7 @@ import {
   isAuthenticated,
   verifyPassword,
 } from "@/lib/auth";
-import { parseEmailList, parseExcelBuffer } from "@/lib/parse-emails";
+import { importRecipientsFromFormData } from "@/lib/import-recipients";
 import { testUnisenderConnection } from "@/lib/unisender";
 
 async function requireAuth() {
@@ -203,77 +203,14 @@ export async function importRecipientsAction(
   formData: FormData,
 ) {
   await requireAuth();
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
-  if (!campaign) return { error: "Рассылка не найдена" };
-  if (campaign.status === "RUNNING") {
-    return { error: "Нельзя импортировать во время отправки" };
-  }
-
-  const replace = formData.get("replace") === "on";
-  const listText = String(formData.get("listText") ?? "");
-  const file = formData.get("file");
-
-  let parsed =
-    listText.trim().length > 0
-      ? parseEmailList(listText)
-      : { recipients: [], totalFound: 0, uniqueCount: 0, invalidCount: 0 };
-
-  if (file instanceof File && file.size > 0) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    parsed = parseExcelBuffer(buffer);
-  }
-
-  if (parsed.recipients.length === 0) {
-    return { error: "Не найдено ни одного email" };
-  }
-
-  if (replace) {
-    await prisma.recipient.deleteMany({ where: { campaignId } });
-  }
-
-  // createMany skipDuplicates via unique constraint
-  const chunkSize = 500;
-  for (let i = 0; i < parsed.recipients.length; i += chunkSize) {
-    const chunk = parsed.recipients.slice(i, i + chunkSize);
-    await prisma.recipient.createMany({
-      data: chunk.map((r) => ({
-        campaignId,
-        email: r.email,
-        label: r.label,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  const count = await prisma.recipient.count({ where: { campaignId } });
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: {
-      status:
-        count > 0 && campaign.subject.trim()
-          ? campaign.status === "DONE" || campaign.status === "FAILED"
-            ? "READY"
-            : "READY"
-          : "DRAFT",
-      finishedAt: null,
-      errorMessage: null,
-    },
-  });
-
-  // reset statuses if re-importing onto done campaign with replace
-  if (replace) {
-    // already all pending from create
-  }
-
+  const result = await importRecipientsFromFormData(campaignId, formData);
+  if ("error" in result) return { error: result.error };
   revalidatePath(`/campaigns/${campaignId}`);
   return {
     ok: true,
-    uniqueCount: parsed.uniqueCount,
-    totalFound: parsed.totalFound,
-    invalidCount: parsed.invalidCount,
+    uniqueCount: result.uniqueCount,
+    totalFound: result.totalFound,
+    invalidCount: result.invalidCount,
   };
 }
 

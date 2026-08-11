@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import {
-  importRecipientsAction,
-  updateCampaignAction,
-} from "@/app/actions";
+import { useRouter } from "next/navigation";
+import { updateCampaignAction } from "@/app/actions";
 import { FilePicker } from "@/components/FilePicker";
 import { parseEmailList } from "@/lib/parse-list";
 import { useToast } from "@/components/Toast";
@@ -52,6 +50,7 @@ export function CampaignControls({
   const [pending, startTransition] = useTransition();
   const listRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
+  const router = useRouter();
 
   const [letter, setLetter] = useState<LetterState>(initial);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -128,51 +127,68 @@ export function CampaignControls({
         msg,
       )
     ) {
-      return "Файл слишком большой для загрузки. Уменьшите Excel или обратитесь к админу (лимит тела запроса).";
+      return "Файл слишком большой для загрузки. Уменьшите Excel или разбейте на части.";
     }
     return msg || "Не удалось сохранить базу";
   }
 
-  function runImport(
-    fn: () => Promise<
-      | {
-          error?: string;
-          ok?: boolean;
-          uniqueCount?: number;
-          totalFound?: number;
-          invalidCount?: number;
-        }
-      | void
-    >,
-  ) {
+  function onImportSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     if (!excelFile && !listText.trim()) {
       const text = "Выберите Excel или вставьте список адресов";
       setErr(text);
       toast.error(text);
       return;
     }
+
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    // Prefer the live File from state (input may be cleared after remount edge cases)
+    if (excelFile) {
+      fd.set("file", excelFile, excelFile.name);
+    } else {
+      fd.delete("file");
+    }
+
     startTransition(async () => {
       setErr(null);
       try {
-        const res = await fn();
-        if (res && "error" in res && res.error) {
-          setErr(res.error);
-          toast.error(res.error, { id: "recipients-save" });
-        } else if (res && "uniqueCount" in res && res.uniqueCount != null) {
+        const res = await fetch(`/api/campaigns/${campaignId}/recipients`, {
+          method: "POST",
+          body: fd,
+          credentials: "same-origin",
+        });
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+          ok?: boolean;
+          uniqueCount?: number;
+          invalidCount?: number;
+        } | null;
+
+        if (!res.ok || data?.error) {
           const text =
-            `Сохранено ${res.uniqueCount.toLocaleString("ru-RU")} адресов` +
-            (res.invalidCount ? ` · пропущено: ${res.invalidCount}` : "");
-          toast.success(text, { id: "recipients-save" });
-          setListText("");
-          setExcelFile(null);
-          setExcelPickerKey((k) => k + 1);
-        } else {
-          toast.success("База адресов сохранена", { id: "recipients-save" });
-          setExcelFile(null);
-          setExcelPickerKey((k) => k + 1);
+            data?.error ||
+            (res.status === 413
+              ? "Файл слишком большой (лимит ~20 МБ)"
+              : `Ошибка импорта (${res.status})`);
+          setErr(text);
+          toast.error(text, { id: "recipients-save" });
+          return;
         }
-      } catch (e) {
-        const text = friendlyImportError(e);
+
+        const text =
+          data?.uniqueCount != null
+            ? `Сохранено ${data.uniqueCount.toLocaleString("ru-RU")} адресов` +
+              (data.invalidCount ? ` · пропущено: ${data.invalidCount}` : "")
+            : "База адресов сохранена";
+        toast.success(text, { id: "recipients-save" });
+        setListText("");
+        setExcelFile(null);
+        setExcelPickerKey((k) => k + 1);
+        form.reset();
+        router.refresh();
+      } catch (err) {
+        const text = friendlyImportError(err);
         setErr(text);
         toast.error(text, { id: "recipients-save" });
       }
@@ -383,10 +399,7 @@ export function CampaignControls({
         ) : null}
       </div>
 
-      <form
-        className="panel stack"
-        action={(fd) => runImport(() => importRecipientsAction(campaignId, fd))}
-      >
+      <form className="panel stack" onSubmit={onImportSubmit}>
         <div
           className="row"
           style={{ justifyContent: "space-between", alignItems: "baseline" }}
