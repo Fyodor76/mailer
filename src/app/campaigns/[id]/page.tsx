@@ -5,13 +5,13 @@ import { CampaignAutoRefresh } from "@/components/CampaignAutoRefresh";
 import { CampaignControls } from "@/components/CampaignControls";
 import { CampaignTabs } from "@/components/CampaignTabs";
 import { CampaignToolbar } from "@/components/CampaignToolbar";
+import { Pagination } from "@/components/Pagination";
 import { prisma } from "@/lib/db";
 import {
   campaignStatusClass,
   campaignStatusLabel,
   formatDate,
   recipientStatusLabel,
-  shouldPollCampaign,
 } from "@/lib/format";
 import type { Metadata } from "next";
 
@@ -21,19 +21,35 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+const CHIPS_PER_PAGE = 50;
+
 type Props = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ rpage?: string }>;
 };
 
-export default async function CampaignPage({ params }: Props) {
+export default async function CampaignPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { rpage } = await searchParams;
+
+  const totalRecipients = await prisma.recipient.count({
+    where: { campaignId: id },
+  });
+  const totalPages = Math.max(1, Math.ceil(totalRecipients / CHIPS_PER_PAGE));
+  const pageRaw = Number.parseInt(rpage ?? "1", 10);
+  const page = Number.isFinite(pageRaw)
+    ? Math.min(totalPages, Math.max(1, pageRaw))
+    : 1;
+  const skip = (page - 1) * CHIPS_PER_PAGE;
+
   const campaign = await prisma.campaign.findUnique({
     where: { id },
     include: {
       provider: true,
       recipients: {
         orderBy: { createdAt: "asc" },
-        take: 100,
+        skip,
+        take: CHIPS_PER_PAGE,
       },
     },
   });
@@ -75,7 +91,17 @@ export default async function CampaignPage({ params }: Props) {
     stats.sent + stats.delivered + stats.opened + stats.clicked;
 
   const canEdit = campaign.status !== "RUNNING";
-  const poll = shouldPollCampaign(campaign.status, campaign.recipients);
+  const poll =
+    campaign.status === "RUNNING" ||
+    stats.pending > 0 ||
+    stats.sent > 0 ||
+    stats.delivered > 0;
+
+  const rangeFrom = stats.total === 0 ? 0 : skip + 1;
+  const rangeTo = Math.min(skip + campaign.recipients.length, stats.total);
+
+  const hrefForPage = (p: number) =>
+    p <= 1 ? `/campaigns/${id}` : `/campaigns/${id}?rpage=${p}`;
 
   const summary = (
     <div className="stats" style={{ marginBottom: 0 }}>
@@ -117,9 +143,9 @@ export default async function CampaignPage({ params }: Props) {
         >
           <h2 style={{ fontSize: "1.2rem" }}>Получатели</h2>
           <span className="muted" style={{ fontSize: "0.85rem" }}>
-            {stats.total > 100
-              ? `первые 100 из ${stats.total.toLocaleString("ru-RU")}`
-              : `${stats.total}`}
+            {stats.total === 0
+              ? "0"
+              : `${rangeFrom}–${rangeTo} из ${stats.total.toLocaleString("ru-RU")}`}
           </span>
         </div>
         {campaign.recipients.length === 0 ? (
@@ -150,6 +176,12 @@ export default async function CampaignPage({ params }: Props) {
                 {campaign.recipients.find((r) => r.error)?.error}
               </div>
             ) : null}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              hrefForPage={hrefForPage}
+              label={`Стр. ${page} из ${totalPages}`}
+            />
           </div>
         )}
         <p className="muted" style={{ fontSize: "0.82rem", marginTop: "1rem" }}>

@@ -428,6 +428,43 @@ textarea {
   top: 1rem;
 }
 
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.pagination-label {
+  font-size: 0.82rem;
+}
+
+.pagination-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pagination-btn {
+  min-width: 2.2rem;
+  padding: 0.35rem 0.55rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.pagination-btn[aria-disabled="true"] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.pagination-ellipsis {
+  padding: 0 0.15rem;
+  font-size: 0.85rem;
+}
+
 .btn-icon {
   appearance: none;
   width: 2.35rem;
