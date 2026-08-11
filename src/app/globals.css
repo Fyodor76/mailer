@@ -468,6 +468,15 @@ textarea {
 .file-picker-name {
   color: var(--muted);
   font-size: 0.9rem;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.file-picker .btn-icon {
+  width: 1.85rem;
+  height: 1.85rem;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .chip-list {

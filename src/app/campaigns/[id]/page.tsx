@@ -117,12 +117,14 @@ export default async function CampaignPage({ params }: Props) {
         >
           <h2 style={{ fontSize: "1.2rem" }}>Получатели</h2>
           <span className="muted" style={{ fontSize: "0.85rem" }}>
-            {stats.total > 100 ? "первые 100" : `${stats.total}`}
+            {stats.total > 100
+              ? `первые 100 из ${stats.total.toLocaleString("ru-RU")}`
+              : `${stats.total}`}
           </span>
         </div>
         {campaign.recipients.length === 0 ? (
           <div className="empty">
-            Вставьте список слева и нажмите «Сохранить»
+            Загрузите Excel слева и нажмите «Сохранить»
           </div>
         ) : (
           <div className="stack" style={{ gap: "0.75rem" }}>

@@ -35,6 +35,9 @@ type LetterState = {
 type SaveStatus = "idle" | "pending" | "saved" | "error";
 
 const AUTOSAVE_MS = 700;
+/** Above this, skip full email parse preview (keeps UI snappy for huge pastes). */
+const PREVIEW_PARSE_LIMIT = 80_000;
+const EXCEL_WARN_BYTES = 512 * 1024;
 
 export function CampaignControls({
   campaignId,
@@ -44,6 +47,8 @@ export function CampaignControls({
 }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [listText, setListText] = useState("");
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [excelPickerKey, setExcelPickerKey] = useState(0);
   const [pending, startTransition] = useTransition();
   const listRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
@@ -91,7 +96,42 @@ export function CampaignControls({
     }
   }
 
-  const preview = useMemo(() => parseEmailList(listText), [listText]);
+  const preview = useMemo(() => {
+    if (!listText.trim()) {
+      return {
+        recipients: [] as { email: string; label?: string }[],
+        uniqueCount: 0,
+        duplicateCount: 0,
+        invalidCount: 0,
+        skippedPreview: false,
+        approxLines: 0,
+      };
+    }
+    if (listText.length > PREVIEW_PARSE_LIMIT) {
+      const approxLines = listText.split(/\r?\n/).filter((l) => l.trim()).length;
+      return {
+        recipients: [],
+        uniqueCount: 0,
+        duplicateCount: 0,
+        invalidCount: 0,
+        skippedPreview: true,
+        approxLines,
+      };
+    }
+    return { ...parseEmailList(listText), skippedPreview: false, approxLines: 0 };
+  }, [listText]);
+
+  function friendlyImportError(err: unknown): string {
+    const msg = err instanceof Error ? err.message : String(err ?? "");
+    if (
+      /body exceeded|413|Body exceeded|multipart|too large|Payload Too Large/i.test(
+        msg,
+      )
+    ) {
+      return "Файл слишком большой для загрузки. Уменьшите Excel или обратитесь к админу (лимит тела запроса).";
+    }
+    return msg || "Не удалось сохранить базу";
+  }
 
   function runImport(
     fn: () => Promise<
@@ -105,20 +145,36 @@ export function CampaignControls({
       | void
     >,
   ) {
+    if (!excelFile && !listText.trim()) {
+      const text = "Выберите Excel или вставьте список адресов";
+      setErr(text);
+      toast.error(text);
+      return;
+    }
     startTransition(async () => {
       setErr(null);
-      const res = await fn();
-      if (res && "error" in res && res.error) {
-        setErr(res.error);
-        toast.error(res.error);
-      } else if (res && "uniqueCount" in res && res.uniqueCount != null) {
-        const text =
-          `Сохранено ${res.uniqueCount} адресов` +
-          (res.invalidCount ? ` · пропущено: ${res.invalidCount}` : "");
-        toast.success(text, { id: "recipients-save" });
-        setListText("");
-      } else {
-        toast.success("База адресов сохранена", { id: "recipients-save" });
+      try {
+        const res = await fn();
+        if (res && "error" in res && res.error) {
+          setErr(res.error);
+          toast.error(res.error, { id: "recipients-save" });
+        } else if (res && "uniqueCount" in res && res.uniqueCount != null) {
+          const text =
+            `Сохранено ${res.uniqueCount.toLocaleString("ru-RU")} адресов` +
+            (res.invalidCount ? ` · пропущено: ${res.invalidCount}` : "");
+          toast.success(text, { id: "recipients-save" });
+          setListText("");
+          setExcelFile(null);
+          setExcelPickerKey((k) => k + 1);
+        } else {
+          toast.success("База адресов сохранена", { id: "recipients-save" });
+          setExcelFile(null);
+          setExcelPickerKey((k) => k + 1);
+        }
+      } catch (e) {
+        const text = friendlyImportError(e);
+        setErr(text);
+        toast.error(text, { id: "recipients-save" });
       }
     });
   }
@@ -337,34 +393,56 @@ export function CampaignControls({
         >
           <div>
             <h2 style={{ fontSize: "1.2rem" }}>База адресов</h2>
-            {recipientCount === 0 ? (
-              <p
-                className="muted"
-                style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}
-              >
-                Сохраните базу — затем можно запускать
-              </p>
-            ) : null}
+            <p
+              className="muted"
+              style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}
+            >
+              {recipientCount > 0
+                ? `В базе сейчас ${recipientCount.toLocaleString("ru-RU")}`
+                : "Для больших баз — Excel, затем «Сохранить»"}
+            </p>
           </div>
           {canEdit ? (
             <button className="btn" type="submit" disabled={pending}>
-              Сохранить
+              {pending ? "Импорт…" : "Сохранить"}
             </button>
           ) : null}
         </div>
         <FilePicker
+          key={excelPickerKey}
           name="file"
           accept=".xlsx,.xls,.csv"
-          disabled={!canEdit}
+          disabled={!canEdit || pending}
           label="Excel"
-          hint="Колонка email или почта. Имя/компания не обязательны."
+          warnAboveBytes={EXCEL_WARN_BYTES}
+          onFileChange={setExcelFile}
+          hint="Колонка email / почта. До десятков тысяч строк. После выбора нажмите «Сохранить»."
         />
+        {excelFile ? (
+          <div
+            className="muted"
+            style={{
+              fontSize: "0.85rem",
+              padding: "0.65rem 0.75rem",
+              background: "var(--accent-soft)",
+              borderRadius: 8,
+              color: "var(--ink)",
+            }}
+          >
+            Выбран <strong>{excelFile.name}</strong> — нажмите{" "}
+            <strong>Сохранить</strong>
+            {listText.trim()
+              ? ". Текст в поле ниже будет проигнорирован (приоритет у Excel)."
+              : "."}
+            {pending ? " Импорт идёт, не закрывайте страницу…" : ""}
+          </div>
+        ) : null}
         <label className="field">
-          Или вставьте список
+          Или вставьте небольшой список
           <textarea
             ref={listRef}
             name="listText"
-            disabled={!canEdit}
+            disabled={!canEdit || pending || Boolean(excelFile)}
             value={listText}
             onChange={(e) => setListText(e.target.value)}
             placeholder={
@@ -372,12 +450,20 @@ export function CampaignControls({
             }
           />
           <span className="muted" style={{ fontSize: "0.8rem" }}>
-            Один email на строку. Имя после запятой — по желанию (для{" "}
-            <code>{"{{to_name}}"}</code>).
+            Для 10k+ адресов используйте Excel выше. Имя после запятой — по
+            желанию (для <code>{"{{to_name}}"}</code>).
           </span>
         </label>
 
-        {preview.recipients.length > 0 ? (
+        {preview.skippedPreview ? (
+          <div className="chip-preview">
+            <div className="muted" style={{ fontSize: "0.85rem" }}>
+              Большой список (~{preview.approxLines.toLocaleString("ru-RU")}{" "}
+              строк) — превью отключено, чтобы не тормозить браузер. Нажмите
+              «Сохранить».
+            </div>
+          </div>
+        ) : preview.recipients.length > 0 ? (
           <div className="chip-preview">
             <div
               className="muted"
@@ -416,7 +502,7 @@ export function CampaignControls({
           <input
             type="checkbox"
             name="replace"
-            disabled={!canEdit}
+            disabled={!canEdit || pending}
             style={{ width: "auto" }}
             defaultChecked={recipientCount > 0}
           />

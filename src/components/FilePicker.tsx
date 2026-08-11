@@ -8,7 +8,16 @@ type Props = {
   disabled?: boolean;
   hint?: string;
   label?: string;
+  /** Soft warn if file is larger (bytes). Still allows select. */
+  warnAboveBytes?: number;
+  onFileChange?: (file: File | null) => void;
 };
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} Б`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
+  return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
+}
 
 export function FilePicker({
   name,
@@ -16,9 +25,24 @@ export function FilePicker({
   disabled,
   hint,
   label = "Файл",
+  warnAboveBytes,
+  onFileChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+
+  function applyFile(next: File | null) {
+    setFile(next);
+    onFileChange?.(next);
+  }
+
+  function clear() {
+    if (inputRef.current) inputRef.current.value = "";
+    applyFile(null);
+  }
+
+  const tooBig =
+    file && warnAboveBytes != null && file.size > warnAboveBytes;
 
   return (
     <div className="field">
@@ -31,8 +55,8 @@ export function FilePicker({
         disabled={disabled}
         hidden
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          setFileName(file?.name ?? null);
+          const next = e.target.files?.[0] ?? null;
+          applyFile(next);
         }}
       />
       <div className="file-picker">
@@ -45,10 +69,32 @@ export function FilePicker({
           Выбрать файл
         </button>
         <span className="file-picker-name">
-          {fileName ?? "Файл не выбран"}
+          {file
+            ? `${file.name} · ${formatBytes(file.size)}`
+            : "Файл не выбран"}
         </span>
+        {file ? (
+          <button
+            type="button"
+            className="btn-icon"
+            disabled={disabled}
+            title="Убрать файл"
+            aria-label="Убрать файл"
+            onClick={clear}
+          >
+            ×
+          </button>
+        ) : null}
       </div>
-      {hint ? (
+      {tooBig ? (
+        <span
+          className="muted"
+          style={{ fontSize: "0.8rem", color: "var(--danger, #b42318)" }}
+        >
+          Файл крупный ({formatBytes(file.size)}) — импорт может занять
+          время. После выбора нажмите «Сохранить».
+        </span>
+      ) : hint ? (
         <span className="muted" style={{ fontSize: "0.8rem" }}>
           {hint}
         </span>
