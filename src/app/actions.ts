@@ -6,9 +6,21 @@ import { prisma } from "@/lib/db";
 import {
   createSession,
   destroySession,
+  getLegacyAccountCredentials,
+  getSuperAdminCredentials,
   isAuthenticated,
-  verifyPassword,
+  isSuperAdmin,
+  normalizeLogin,
+  timingSafeEqualString,
 } from "@/lib/auth";
+import {
+  ensureLegacyAccount,
+  findUserByLogin,
+  hashPassword,
+  validateLogin,
+  validatePassword,
+  verifyPasswordHash,
+} from "@/lib/users";
 import { importRecipientsFromFormData } from "@/lib/import-recipients";
 import { testUnisenderConnection } from "@/lib/unisender";
 
@@ -18,13 +30,84 @@ async function requireAuth() {
   }
 }
 
-export async function loginAction(formData: FormData) {
-  const password = String(formData.get("password") ?? "");
-  if (!verifyPassword(password)) {
-    return { error: "Неверный пароль" };
+async function requireSuperAdmin() {
+  if (!(await isSuperAdmin())) {
+    redirect("/");
   }
-  await createSession();
-  redirect("/");
+}
+
+export async function loginAction(formData: FormData) {
+  const login = normalizeLogin(String(formData.get("login") ?? ""));
+  const password = String(formData.get("password") ?? "");
+  if (!login || !password) {
+    return { error: "Укажите логин и пароль" };
+  }
+
+  const superAdmin = getSuperAdminCredentials();
+  if (
+    superAdmin &&
+    timingSafeEqualString(login, superAdmin.login) &&
+    timingSafeEqualString(password, superAdmin.password)
+  ) {
+    await createSession({ login: superAdmin.login, role: "superadmin" });
+    redirect("/");
+  }
+
+  await ensureLegacyAccount();
+
+  const user = await findUserByLogin(login);
+  if (user && verifyPasswordHash(password, user.passwordHash)) {
+    await createSession({ login: user.login, role: "user" });
+    redirect("/");
+  }
+
+  const legacy = getLegacyAccountCredentials();
+  if (
+    legacy &&
+    timingSafeEqualString(login, legacy.login) &&
+    timingSafeEqualString(password, legacy.password)
+  ) {
+    await createSession({ login: legacy.login, role: "user" });
+    redirect("/");
+  }
+
+  return { error: "Неверный логин или пароль" };
+}
+
+export async function createAccountAction(formData: FormData) {
+  await requireSuperAdmin();
+
+  const login = normalizeLogin(String(formData.get("login") ?? ""));
+  const password = String(formData.get("password") ?? "");
+
+  const loginError = validateLogin(login);
+  if (loginError) return { error: loginError };
+  const passwordError = validatePassword(password);
+  if (passwordError) return { error: passwordError };
+
+  const existing = await findUserByLogin(login);
+  if (existing) return { error: "Такой логин уже есть" };
+
+  await prisma.user.create({
+    data: {
+      login,
+      passwordHash: hashPassword(password),
+    },
+  });
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function deleteAccountAction(userId: string) {
+  await requireSuperAdmin();
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch {
+    return { error: "Аккаунт не найден" };
+  }
+  revalidatePath("/admin");
+  return { ok: true };
 }
 
 export async function logoutAction() {

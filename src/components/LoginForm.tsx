@@ -18,11 +18,21 @@ export function LoginForm() {
       }}
     >
       <label className="field">
+        Логин
+        <input
+          type="text"
+          name="login"
+          autoFocus
+          required
+          autoComplete="username"
+          placeholder="operator"
+        />
+      </label>
+      <label className="field">
         Пароль
         <input
           type="password"
           name="password"
-          autoFocus
           required
           autoComplete="current-password"
           placeholder="••••••••"

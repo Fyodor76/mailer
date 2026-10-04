@@ -37,7 +37,7 @@ export default function LoginPage() {
           <div>
             <h1>Mail Orchestrator</h1>
             <p className="muted" style={{ margin: 0 }}>
-              Введите пароль, чтобы продолжить
+              Введите логин и пароль, чтобы продолжить
             </p>
           </div>
         </div>

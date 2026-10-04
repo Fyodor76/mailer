@@ -39,7 +39,10 @@ npm run dev
 npm run dev:worker
 ```
 
-Откройте http://localhost:3000 — пароль из `APP_PASSWORD` (по умолчанию `changeme`).
+Откройте http://localhost:3000 — вход по логину и паролю.
+
+- Текущий аккаунт: `APP_LOGIN` / `APP_PASSWORD` (по умолчанию `operator` / `changeme`).
+- Super admin: `SUPER_ADMIN_LOGIN` / `SUPER_ADMIN_PASSWORD`. После входа в шапке появится **Аккаунты** (`/admin`) — там можно создать новые логины.
 
 ## Полный Docker
 

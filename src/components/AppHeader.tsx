@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/actions";
+import { getSession } from "@/lib/auth";
 
 function BrandMark() {
   return (
@@ -30,7 +31,10 @@ function BrandMark() {
   );
 }
 
-export function AppHeader() {
+export async function AppHeader() {
+  const session = await getSession();
+  const isSuperAdmin = session?.role === "superadmin";
+
   return (
     <header className="shell topbar">
       <Link href="/" className="brand">
@@ -44,6 +48,16 @@ export function AppHeader() {
         <Link href="/settings" className="nav-link">
           Провайдер
         </Link>
+        {isSuperAdmin ? (
+          <Link href="/admin" className="nav-link">
+            Аккаунты
+          </Link>
+        ) : null}
+        {session?.login ? (
+          <span className="nav-user" title={session.login}>
+            {session.login}
+          </span>
+        ) : null}
         <form action={logoutAction}>
           <button type="submit" className="btn btn-ghost">
             Выйти

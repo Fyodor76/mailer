@@ -22,12 +22,17 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
   let authed = false;
+  let isSuperAdmin = false;
   if (token) {
     try {
       const secret = process.env.SESSION_SECRET;
       if (secret && secret.length >= 16) {
-        await jwtVerify(token, new TextEncoder().encode(secret));
-        authed = true;
+        const { payload } = await jwtVerify(
+          token,
+          new TextEncoder().encode(secret),
+        );
+        authed = payload.auth === true || payload.role === "superadmin" || payload.role === "user";
+        isSuperAdmin = payload.role === "superadmin";
       }
     } catch {
       authed = false;
@@ -45,6 +50,14 @@ export async function middleware(request: NextRequest) {
   }
 
   if (authed && pathname === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  const isAdminPath =
+    pathname === "/admin" || pathname.startsWith("/admin/");
+  if (authed && isAdminPath && !isSuperAdmin) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

@@ -132,6 +132,16 @@ h3 {
   background: rgba(31, 107, 90, 0.08);
 }
 
+.nav-user {
+  padding: 0.45rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;
