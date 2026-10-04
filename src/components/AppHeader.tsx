@@ -54,9 +54,9 @@ export async function AppHeader() {
           </Link>
         ) : null}
         {session?.login ? (
-          <span className="nav-user" title={session.login}>
+          <Link href="/profile" className="nav-link nav-user" title="Профиль">
             {session.login}
-          </span>
+          </Link>
         ) : null}
         <form action={logoutAction}>
           <button type="submit" className="btn btn-ghost">

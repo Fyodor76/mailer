@@ -7,6 +7,7 @@ import {
   createSession,
   destroySession,
   getLegacyAccountCredentials,
+  getSession,
   getSuperAdminCredentials,
   isAuthenticated,
   isSuperAdmin,
@@ -17,6 +18,7 @@ import {
   ensureLegacyAccount,
   findUserByLogin,
   hashPassword,
+  isLoginTaken,
   validateLogin,
   validatePassword,
   verifyPasswordHash,
@@ -107,6 +109,86 @@ export async function deleteAccountAction(userId: string) {
     return { error: "Аккаунт не найден" };
   }
   revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function updateAccountAction(userId: string, formData: FormData) {
+  await requireSuperAdmin();
+
+  const login = normalizeLogin(String(formData.get("login") ?? ""));
+  const password = String(formData.get("password") ?? "");
+
+  const loginError = validateLogin(login);
+  if (loginError) return { error: loginError };
+  if (password) {
+    const passwordError = validatePassword(password);
+    if (passwordError) return { error: passwordError };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: "Аккаунт не найден" };
+  if (await isLoginTaken(login, user.id)) return { error: "Такой логин уже есть" };
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      login,
+      ...(password ? { passwordHash: hashPassword(password) } : {}),
+    },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
+export async function updateProfileAction(formData: FormData) {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (session.role === "superadmin") {
+    return { error: "Логин и пароль super admin меняются в .env" };
+  }
+
+  const login = normalizeLogin(String(formData.get("login") ?? ""));
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const password = String(formData.get("password") ?? "");
+
+  if (!currentPassword) return { error: "Укажите текущий пароль" };
+
+  const loginError = validateLogin(login);
+  if (loginError) return { error: loginError };
+  if (password) {
+    const passwordError = validatePassword(password);
+    if (passwordError) return { error: passwordError };
+  }
+
+  await ensureLegacyAccount();
+  const user = await findUserByLogin(session.login);
+  if (!user) return { error: "Аккаунт не найден" };
+
+  const legacy = getLegacyAccountCredentials();
+  const passwordOk =
+    verifyPasswordHash(currentPassword, user.passwordHash) ||
+    Boolean(
+      legacy &&
+        timingSafeEqualString(session.login, legacy.login) &&
+        timingSafeEqualString(currentPassword, legacy.password),
+    );
+  if (!passwordOk) return { error: "Неверный текущий пароль" };
+
+  if (await isLoginTaken(login, user.id)) return { error: "Такой логин уже есть" };
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      login,
+      ...(password ? { passwordHash: hashPassword(password) } : {}),
+    },
+  });
+
+  await createSession({ login: updated.login, role: "user" });
+  revalidatePath("/profile");
+  revalidatePath("/");
   return { ok: true };
 }
 

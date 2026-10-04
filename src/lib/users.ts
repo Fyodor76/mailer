@@ -71,3 +71,12 @@ export async function findUserByLogin(login: string) {
     where: { login: normalizeLogin(login) },
   });
 }
+
+export async function isLoginTaken(login: string, excludeUserId?: string) {
+  const existing = await prisma.user.findUnique({
+    where: { login: normalizeLogin(login) },
+    select: { id: true },
+  });
+  if (!existing) return false;
+  return existing.id !== excludeUserId;
+}

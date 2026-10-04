@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import {
   CreateAccountForm,
-  DeleteAccountButton,
+  EditAccountForm,
 } from "@/components/CreateAccountForm";
 import { isSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -41,32 +41,31 @@ export default async function AdminPage() {
           <h2 style={{ fontSize: "1.1rem", margin: 0 }}>Новый аккаунт</h2>
           <CreateAccountForm />
         </div>
-        <div className="panel" style={{ maxWidth: 640, marginTop: "1.25rem" }}>
+        <div className="panel stack" style={{ maxWidth: 640, marginTop: "1.25rem" }}>
+          <h2 style={{ fontSize: "1.1rem", margin: 0 }}>Существующие</h2>
           {users.length === 0 ? (
             <div className="empty">Пока нет созданных аккаунтов.</div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Логин</th>
-                  <th>Создан</th>
-                  <th style={{ width: 88 }} />
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id}>
-                    <td>
-                      <strong>{user.login}</strong>
-                    </td>
-                    <td className="muted">{formatDate(user.createdAt)}</td>
-                    <td>
-                      <DeleteAccountButton userId={user.id} login={user.login} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            users.map((user, index) => (
+              <div
+                key={user.id}
+                className="stack"
+                style={
+                  index === 0
+                    ? undefined
+                    : { borderTop: "1px solid var(--line)", paddingTop: "1rem" }
+                }
+              >
+                <div className="muted" style={{ fontSize: "0.82rem" }}>
+                  Создан {formatDate(user.createdAt)}
+                </div>
+                <EditAccountForm
+                  key={`${user.id}-${user.login}`}
+                  userId={user.id}
+                  login={user.login}
+                />
+              </div>
+            ))
           )}
         </div>
       </main>

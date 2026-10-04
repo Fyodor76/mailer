@@ -142,6 +142,10 @@ h3 {
   white-space: nowrap;
 }
 
+a.nav-user {
+  color: var(--muted);
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;
