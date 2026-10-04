@@ -8,6 +8,7 @@ export type SessionRole = "superadmin" | "user";
 export type SessionUser = {
   login: string;
   role: SessionRole;
+  userId?: string;
 };
 
 function getSecret() {
@@ -54,6 +55,7 @@ export async function createSession(user: SessionUser) {
     auth: true,
     login: user.login,
     role: user.role,
+    ...(user.userId ? { userId: user.userId } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -82,12 +84,13 @@ export async function getSession(): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
     const login = typeof payload.login === "string" ? payload.login : "";
+    const userId = typeof payload.userId === "string" ? payload.userId : undefined;
     const role = payload.role === "superadmin" ? "superadmin" : "user";
     if (payload.role === "superadmin" || payload.role === "user") {
-      return { login, role };
+      return { login, role, userId };
     }
     if (payload.auth === true) {
-      return { login: login || "operator", role: "user" };
+      return { login: login || "operator", role: "user", userId };
     }
     return null;
   } catch {

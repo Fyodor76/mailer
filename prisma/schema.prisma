@@ -47,6 +47,12 @@ model Provider {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   campaigns       Campaign[]
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
 }
 
 model Campaign {
@@ -67,15 +73,22 @@ model Campaign {
   providerId String?
   provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
 
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   recipients Recipient[]
+
+  @@index([userId])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  login        String   @unique
+  id           String     @id @default(cuid())
+  login        String     @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  providers    Provider[]
+  campaigns    Campaign[]
 }
 
 model Recipient {

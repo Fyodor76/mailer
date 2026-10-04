@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { CampaignAutoRefresh } from "@/components/CampaignAutoRefresh";
+import { requireAppUser } from "@/lib/current-user";
 import { prisma } from "@/lib/db";
 import {
   campaignStatusClass,
@@ -38,11 +39,12 @@ type Props = {
 };
 
 export default async function ReportPage({ params, searchParams }: Props) {
+  const user = await requireAppUser();
   const { id } = await params;
   const { status } = await searchParams;
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id },
+  const campaign = await prisma.campaign.findFirst({
+    where: { id, userId: user.id },
     include: { recipients: { select: { status: true } } },
   });
   if (!campaign) notFound();

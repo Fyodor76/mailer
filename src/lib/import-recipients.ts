@@ -17,9 +17,10 @@ const CHUNK = 1000;
 export async function importRecipientsFromFormData(
   campaignId: string,
   formData: FormData,
+  userId: string,
 ): Promise<ImportRecipientsResult> {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: campaignId, userId },
   });
   if (!campaign) return { error: "Рассылка не найдена" };
   if (campaign.status === "RUNNING") {

@@ -17,15 +17,19 @@ export async function GET() {
 export async function POST(request: Request) {
   const rawBody = await request.text();
 
-  const provider = await prisma.provider.findFirst({
+  const providers = await prisma.provider.findMany({
     where: { type: "UNISENDER_GO" },
+    select: { apiKey: true },
   });
 
-  if (!provider) {
+  if (providers.length === 0) {
     return NextResponse.json({ error: "No provider" }, { status: 503 });
   }
 
-  if (!verifyUnisenderWebhookAuth(rawBody, provider.apiKey)) {
+  const authorized = providers.some((provider) =>
+    verifyUnisenderWebhookAuth(rawBody, provider.apiKey),
+  );
+  if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,5 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { ProviderForm } from "@/components/ProviderForm";
+import { requireAppUser } from "@/lib/current-user";
 import { prisma } from "@/lib/db";
 import type { Metadata } from "next";
 
@@ -10,8 +11,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  const user = await requireAppUser();
   const provider = await prisma.provider.findFirst({
-    where: { type: "UNISENDER_GO" },
+    where: { type: "UNISENDER_GO", userId: user.id },
   });
 
   const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(

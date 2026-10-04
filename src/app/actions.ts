@@ -9,7 +9,6 @@ import {
   getLegacyAccountCredentials,
   getSession,
   getSuperAdminCredentials,
-  isAuthenticated,
   isSuperAdmin,
   normalizeLogin,
   timingSafeEqualString,
@@ -25,12 +24,7 @@ import {
 } from "@/lib/users";
 import { importRecipientsFromFormData } from "@/lib/import-recipients";
 import { testUnisenderConnection } from "@/lib/unisender";
-
-async function requireAuth() {
-  if (!(await isAuthenticated())) {
-    redirect("/login");
-  }
-}
+import { getOwnedCampaign, requireAppUser } from "@/lib/current-user";
 
 async function requireSuperAdmin() {
   if (!(await isSuperAdmin())) {
@@ -59,7 +53,7 @@ export async function loginAction(formData: FormData) {
 
   const user = await findUserByLogin(login);
   if (user && verifyPasswordHash(password, user.passwordHash)) {
-    await createSession({ login: user.login, role: "user" });
+    await createSession({ login: user.login, role: "user", userId: user.id });
     redirect("/");
   }
 
@@ -69,7 +63,12 @@ export async function loginAction(formData: FormData) {
     timingSafeEqualString(login, legacy.login) &&
     timingSafeEqualString(password, legacy.password)
   ) {
-    await createSession({ login: legacy.login, role: "user" });
+    const legacyUser = await findUserByLogin(legacy.login);
+    await createSession({
+      login: legacy.login,
+      role: "user",
+      userId: legacyUser?.id,
+    });
     redirect("/");
   }
 
@@ -186,7 +185,7 @@ export async function updateProfileAction(formData: FormData) {
     },
   });
 
-  await createSession({ login: updated.login, role: "user" });
+  await createSession({ login: updated.login, role: "user", userId: updated.id });
   revalidatePath("/profile");
   revalidatePath("/");
   return { ok: true };
@@ -198,7 +197,7 @@ export async function logoutAction() {
 }
 
 export async function saveProviderAction(formData: FormData) {
-  await requireAuth();
+  const user = await requireAppUser();
 
   const apiKey = String(formData.get("apiKey") ?? "").trim();
   const apiUrl = String(formData.get("apiUrl") ?? "").trim();
@@ -219,7 +218,7 @@ export async function saveProviderAction(formData: FormData) {
   }
 
   const existing = await prisma.provider.findFirst({
-    where: { type: "UNISENDER_GO" },
+    where: { type: "UNISENDER_GO", userId: user.id },
   });
 
   const data = {
@@ -240,13 +239,14 @@ export async function saveProviderAction(formData: FormData) {
     : await prisma.provider.create({
         data: {
           type: "UNISENDER_GO",
+          userId: user.id,
           ...data,
         },
       });
 
   // Кампании, созданные до настройки провайдера
   await prisma.campaign.updateMany({
-    where: { providerId: null },
+    where: { providerId: null, userId: user.id },
     data: { providerId: provider.id },
   });
 
@@ -257,7 +257,7 @@ export async function saveProviderAction(formData: FormData) {
 }
 
 export async function testProviderAction(formData: FormData) {
-  await requireAuth();
+  await requireAppUser();
   const apiKey = String(formData.get("apiKey") ?? "").trim();
   const apiUrl = String(formData.get("apiUrl") ?? "").trim();
   if (!apiKey || !apiUrl) {
@@ -267,7 +267,7 @@ export async function testProviderAction(formData: FormData) {
 }
 
 export async function registerWebhookAction() {
-  await requireAuth();
+  const user = await requireAppUser();
 
   const baseUrl = (process.env.APP_BASE_URL || "").replace(/\/+$/, "");
   if (!baseUrl || baseUrl.includes("localhost")) {
@@ -278,7 +278,7 @@ export async function registerWebhookAction() {
   }
 
   const provider = await prisma.provider.findFirst({
-    where: { type: "UNISENDER_GO" },
+    where: { type: "UNISENDER_GO", userId: user.id },
   });
   if (!provider) return { error: "Сначала сохраните провайдера" };
 
@@ -295,16 +295,17 @@ export async function registerWebhookAction() {
 }
 
 export async function createCampaignAction(formData: FormData) {
-  await requireAuth();
+  const user = await requireAppUser();
   const name = String(formData.get("name") ?? "").trim() || "Новый запуск";
 
   const provider = await prisma.provider.findFirst({
-    where: { type: "UNISENDER_GO" },
+    where: { type: "UNISENDER_GO", userId: user.id },
   });
 
   const campaign = await prisma.campaign.create({
     data: {
       name,
+      userId: user.id,
       providerId: provider?.id,
       status: "DRAFT",
     },
@@ -317,7 +318,7 @@ export async function updateCampaignAction(
   campaignId: string,
   formData: FormData,
 ) {
-  await requireAuth();
+  const user = await requireAppUser();
 
   const name = String(formData.get("name") ?? "").trim();
   const subject = String(formData.get("subject") ?? "");
@@ -329,9 +330,7 @@ export async function updateCampaignAction(
   );
   const delayMs = Math.max(0, Number(formData.get("delayMs") ?? 1000) || 0);
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
+  const campaign = await getOwnedCampaign(user.id, campaignId);
   if (!campaign) return { error: "Рассылка не найдена" };
   if (campaign.status === "RUNNING") {
     return { error: "Нельзя менять настройки во время отправки" };
@@ -367,8 +366,8 @@ export async function importRecipientsAction(
   campaignId: string,
   formData: FormData,
 ) {
-  await requireAuth();
-  const result = await importRecipientsFromFormData(campaignId, formData);
+  const user = await requireAppUser();
+  const result = await importRecipientsFromFormData(campaignId, formData, user.id);
   if ("error" in result) return { error: result.error };
   revalidatePath(`/campaigns/${campaignId}`);
   return {
@@ -380,17 +379,17 @@ export async function importRecipientsAction(
 }
 
 export async function startCampaignAction(campaignId: string) {
-  await requireAuth();
+  const user = await requireAppUser();
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: campaignId, userId: user.id },
     include: { provider: true, _count: { select: { recipients: true } } },
   });
   if (!campaign) return { error: "Не найдена" };
 
   if (!campaign.provider) {
     const provider = await prisma.provider.findFirst({
-      where: { type: "UNISENDER_GO" },
+      where: { type: "UNISENDER_GO", userId: user.id },
     });
     if (!provider) return { error: "Сначала настройте провайдера" };
     await prisma.campaign.update({
@@ -401,9 +400,6 @@ export async function startCampaignAction(campaignId: string) {
 
   if (!campaign.subject.trim()) return { error: "Укажите тему письма" };
   if (campaign._count.recipients === 0) return { error: "Нет получателей" };
-
-  // if restarting a done/failed — reset failed/pending only? keep sent, reset failed to pending optional
-  // For simplicity: only send PENDING. User can re-queue failed separately.
 
   const pending = await prisma.recipient.count({
     where: { campaignId, status: "PENDING" },
@@ -428,7 +424,9 @@ export async function startCampaignAction(campaignId: string) {
 }
 
 export async function pauseCampaignAction(campaignId: string) {
-  await requireAuth();
+  const user = await requireAppUser();
+  const campaign = await getOwnedCampaign(user.id, campaignId);
+  if (!campaign) return { error: "Не найдена" };
   await prisma.campaign.update({
     where: { id: campaignId },
     data: { status: "PAUSED" },
@@ -439,10 +437,8 @@ export async function pauseCampaignAction(campaignId: string) {
 }
 
 export async function resetFailedAction(campaignId: string) {
-  await requireAuth();
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
+  const user = await requireAppUser();
+  const campaign = await getOwnedCampaign(user.id, campaignId);
   if (!campaign) return { error: "Не найдена" };
   if (campaign.status === "RUNNING") {
     return { error: "Сначала поставьте на паузу" };
@@ -466,10 +462,8 @@ export async function resetFailedAction(campaignId: string) {
 }
 
 export async function deleteCampaignAction(campaignId: string) {
-  await requireAuth();
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
+  const user = await requireAppUser();
+  const campaign = await getOwnedCampaign(user.id, campaignId);
   if (!campaign) return { error: "Не найдена" };
   if (campaign.status === "RUNNING") {
     return { error: "Сначала остановите отправку" };

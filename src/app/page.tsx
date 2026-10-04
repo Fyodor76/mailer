@@ -1,6 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { CampaignAutoRefresh } from "@/components/CampaignAutoRefresh";
 import { DeleteCampaignButton } from "@/components/CampaignToolbar";
+import { requireAppUser } from "@/lib/current-user";
 import { prisma } from "@/lib/db";
 import {
   calcStats,
@@ -19,7 +20,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  const user = await requireAppUser();
   const campaigns = await prisma.campaign.findMany({
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     include: {
       recipients: { select: { status: true } },

@@ -6,6 +6,7 @@ import { CampaignControls } from "@/components/CampaignControls";
 import { CampaignTabs } from "@/components/CampaignTabs";
 import { CampaignToolbar } from "@/components/CampaignToolbar";
 import { Pagination } from "@/components/Pagination";
+import { requireAppUser } from "@/lib/current-user";
 import { prisma } from "@/lib/db";
 import {
   campaignStatusClass,
@@ -29,11 +30,12 @@ type Props = {
 };
 
 export default async function CampaignPage({ params, searchParams }: Props) {
+  const user = await requireAppUser();
   const { id } = await params;
   const { rpage } = await searchParams;
 
   const totalRecipients = await prisma.recipient.count({
-    where: { campaignId: id },
+    where: { campaignId: id, campaign: { userId: user.id } },
   });
   const totalPages = Math.max(1, Math.ceil(totalRecipients / CHIPS_PER_PAGE));
   const pageRaw = Number.parseInt(rpage ?? "1", 10);
@@ -42,8 +44,8 @@ export default async function CampaignPage({ params, searchParams }: Props) {
     : 1;
   const skip = (page - 1) * CHIPS_PER_PAGE;
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id },
+  const campaign = await prisma.campaign.findFirst({
+    where: { id, userId: user.id },
     include: {
       provider: true,
       recipients: {
@@ -53,7 +55,6 @@ export default async function CampaignPage({ params, searchParams }: Props) {
       },
     },
   });
-
   if (!campaign) notFound();
 
   const grouped = await prisma.recipient.groupBy({

@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { isAuthenticated } from "@/lib/auth";
+import { getAppUser } from "@/lib/current-user";
 import { importRecipientsFromFormData } from "@/lib/import-recipients";
 
 export const runtime = "nodejs";
@@ -10,7 +10,8 @@ export const maxDuration = 300;
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, ctx: Ctx) {
-  if (!(await isAuthenticated())) {
+  const user = await getAppUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,7 +32,7 @@ export async function POST(request: Request, ctx: Ctx) {
   }
 
   try {
-    const result = await importRecipientsFromFormData(campaignId, formData);
+    const result = await importRecipientsFromFormData(campaignId, formData, user.id);
     if ("error" in result) {
       return NextResponse.json(result, { status: 400 });
     }
