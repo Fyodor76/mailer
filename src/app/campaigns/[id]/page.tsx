@@ -5,6 +5,7 @@ import { CampaignAutoRefresh } from "@/components/CampaignAutoRefresh";
 import { CampaignControls } from "@/components/CampaignControls";
 import { CampaignTabs } from "@/components/CampaignTabs";
 import { CampaignToolbar } from "@/components/CampaignToolbar";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import { Pagination } from "@/components/Pagination";
 import { requireAppUser } from "@/lib/current-user";
 import { prisma } from "@/lib/db";
@@ -66,7 +67,7 @@ export default async function CampaignPage({ params, searchParams }: Props) {
     prisma.sendEvent.findMany({
       where: { campaignId: id },
       orderBy: { sentAt: "desc" },
-      take: 400,
+      take: 20000,
     }),
   ]);
 
@@ -149,7 +150,12 @@ export default async function CampaignPage({ params, searchParams }: Props) {
           className="row"
           style={{ justifyContent: "space-between", marginBottom: "0.75rem" }}
         >
-          <h2 style={{ fontSize: "1.2rem" }}>Получатели</h2>
+          <div>
+            <h2 style={{ fontSize: "1.2rem" }}>Получатели</h2>
+            <p className="muted" style={{ margin: "0.2rem 0 0", fontSize: "0.82rem" }}>
+              Общая база: ожидающие и уже отправленные вместе. Повторно уйдут только «Ожидает».
+            </p>
+          </div>
           <span className="muted" style={{ fontSize: "0.85rem" }}>
             {stats.total === 0
               ? "0"
@@ -278,49 +284,18 @@ export default async function CampaignPage({ params, searchParams }: Props) {
           setup={setup}
           analytics={analytics}
           history={
-            <div className="panel">
-              {events.length === 0 ? (
-                <div className="empty">
-                  История появится после отправки. Старые адреса, стёртые
-                  заменой базы, можно вернуть кнопкой «Вернуть отправленные».
-                </div>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Когда</th>
-                      <th>Адрес</th>
-                      <th>Статус</th>
-                      <th>Источник</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.map((event) => (
-                      <tr key={event.id}>
-                        <td className="muted">{formatDate(event.sentAt)}</td>
-                        <td>
-                          <strong>{event.email}</strong>
-                          {event.label ? (
-                            <div className="muted" style={{ fontSize: "0.85rem" }}>
-                              {event.label}
-                            </div>
-                          ) : null}
-                          {event.error ? (
-                            <div className="muted" style={{ fontSize: "0.85rem" }}>
-                              {event.error}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td>{recipientStatusLabel(event.status)}</td>
-                        <td className="muted">
-                          {event.source === "restore" ? "Unisender" : "Отправка"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <HistoryPanel
+              rows={events.map((event) => ({
+                id: event.id,
+                email: event.email,
+                label: event.label,
+                status: event.status,
+                statusLabel: recipientStatusLabel(event.status),
+                error: event.error,
+                source: event.source,
+                sentAt: formatDate(event.sentAt),
+              }))}
+            />
           }
         />
       </main>
