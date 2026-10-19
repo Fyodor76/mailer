@@ -35,10 +35,19 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [sender, setSender] = useState("");
+  const [day, setDay] = useState("");
 
   const senders = useMemo(() => {
     const unique = new Set(rows.map((row) => row.fromEmail || "Без отправителя"));
     return [...unique].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [rows]);
+
+  const days = useMemo(() => {
+    const unique: string[] = [];
+    for (const row of rows) {
+      if (!unique.includes(row.day)) unique.push(row.day);
+    }
+    return unique;
   }, [rows]);
 
   const filtered = useMemo(() => {
@@ -49,6 +58,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
         return false;
       }
       if (sender && rowSender !== sender) return false;
+      if (day && row.day !== day) return false;
       if (!needle) return true;
       return (
         row.email.toLowerCase().includes(needle) ||
@@ -56,7 +66,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
         (row.error ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [query, rows, sender, status]);
+  }, [day, query, rows, sender, status]);
 
   const groups = useMemo(() => {
     const bySender = new Map<string, Map<string, HistoryRow[]>>();
@@ -125,6 +135,14 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
           <select value={sender} onChange={(event) => setSender(event.target.value)}>
             <option value="">Все отправители</option>
             {senders.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <select value={day} onChange={(event) => setDay(event.target.value)}>
+            <option value="">Все даты</option>
+            {days.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
