@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import {
   pauseCampaignAction,
   resetFailedAction,
-  restoreCampaignAction,
   startCampaignAction,
   deleteCampaignAction,
 } from "@/app/actions";
@@ -38,7 +37,6 @@ type ToolbarProps = {
   pendingCount: number;
   failedCount: number;
   hasSubject: boolean;
-  canRestore: boolean;
 };
 
 export function CampaignToolbar({
@@ -47,7 +45,6 @@ export function CampaignToolbar({
   pendingCount,
   failedCount,
   hasSubject,
-  canRestore,
 }: ToolbarProps) {
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -122,29 +119,6 @@ export function CampaignToolbar({
             }
           >
             Пауза
-          </button>
-        ) : null}
-
-        {canRestore && status !== "RUNNING" ? (
-          <button
-            className="btn btn-secondary"
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              if (
-                !confirm(
-                  "Вернуть из Unisender адреса, которые уже уходили по этой теме с даты старта? Новые ожидающие останутся.",
-                )
-              ) {
-                return;
-              }
-              run(
-                () => restoreCampaignAction(campaignId),
-                "Отправленные адреса восстановлены",
-              );
-            }}
-          >
-            Вернуть отправленные
           </button>
         ) : null}
 

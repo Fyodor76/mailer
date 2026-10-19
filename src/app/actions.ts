@@ -25,7 +25,6 @@ import {
 import { importRecipientsFromFormData } from "@/lib/import-recipients";
 import { testUnisenderConnection } from "@/lib/unisender";
 import { getOwnedCampaign, requireAppUser } from "@/lib/current-user";
-import { restoreCampaignFromUnisender } from "@/lib/restore-sends";
 
 async function requireSuperAdmin() {
   if (!(await isSuperAdmin())) {
@@ -462,15 +461,6 @@ export async function resetFailedAction(campaignId: string) {
 
   revalidatePath(`/campaigns/${campaignId}`);
   return { ok: true };
-}
-
-export async function restoreCampaignAction(campaignId: string) {
-  const user = await requireAppUser();
-  const result = await restoreCampaignFromUnisender(campaignId, user.id);
-  if ("error" in result) return result;
-  revalidatePath(`/campaigns/${campaignId}`);
-  revalidatePath("/");
-  return result;
 }
 
 export async function deleteCampaignAction(campaignId: string) {

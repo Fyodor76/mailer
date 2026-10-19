@@ -89,6 +89,7 @@ model SendEvent {
   status        RecipientStatus
   error         String?
   providerJobId String?
+  fromEmail     String?
   source        String          @default("worker")
   sentAt        DateTime        @default(now())
   createdAt     DateTime        @default(now())

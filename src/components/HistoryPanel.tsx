@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 
@@ -9,7 +9,8 @@ export type HistoryRow = {
   status: string;
   statusLabel: string;
   error: string | null;
-  source: string;
+  fromEmail: string;
+  day: string;
   sentAt: string;
 };
 
@@ -33,15 +34,21 @@ function csvCell(value: string) {
 export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
-  const [source, setSource] = useState("");
+  const [sender, setSender] = useState("");
+
+  const senders = useMemo(() => {
+    const unique = new Set(rows.map((row) => row.fromEmail || "Без отправителя"));
+    return [...unique].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return rows.filter((row) => {
+      const rowSender = row.fromEmail || "Без отправителя";
       if (status === "FAILED" ? !ERROR_STATUSES.has(row.status) : status && row.status !== status) {
         return false;
       }
-      if (source && row.source !== source) return false;
+      if (sender && rowSender !== sender) return false;
       if (!needle) return true;
       return (
         row.email.toLowerCase().includes(needle) ||
@@ -49,20 +56,34 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
         (row.error ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [query, rows, source, status]);
+  }, [query, rows, sender, status]);
+
+  const groups = useMemo(() => {
+    const bySender = new Map<string, Map<string, HistoryRow[]>>();
+    for (const row of filtered) {
+      const rowSender = row.fromEmail || "Без отправителя";
+      const byDay = bySender.get(rowSender) ?? new Map<string, HistoryRow[]>();
+      const dayRows = byDay.get(row.day) ?? [];
+      dayRows.push(row);
+      byDay.set(row.day, dayRows);
+      bySender.set(rowSender, byDay);
+    }
+    return [...bySender.entries()];
+  }, [filtered]);
 
   function exportCsv() {
-    const header = ["Когда", "Email", "Имя", "Статус", "Ошибка", "Источник"];
+    const header = ["Отправитель", "Дата", "Когда", "Email", "Имя", "Статус", "Ошибка"];
     const lines = [
       header.map(csvCell).join(";"),
       ...filtered.map((row) =>
         [
+          row.fromEmail || "Без отправителя",
+          row.day,
           row.sentAt,
           row.email,
           row.label ?? "",
           row.statusLabel,
           row.error ?? "",
-          row.source === "restore" ? "Unisender" : "Отправка",
         ]
           .map(csvCell)
           .join(";"),
@@ -74,7 +95,7 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "history.csv";
+    link.download = "sends.csv";
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -83,12 +104,13 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
     return (
       <div className="panel">
         <div className="empty">
-          История появится после отправки. Старые адреса, стёртые заменой базы,
-          можно вернуть кнопкой «Вернуть отправленные».
+          Здесь появятся отправки. Они остаются отдельно от текущей базы и группируются по отправителю.
         </div>
       </div>
     );
   }
+
+  let shown = 0;
 
   return (
     <div className="panel stack">
@@ -100,6 +122,14 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
             placeholder="Поиск по адресу"
             style={{ minWidth: 220 }}
           />
+          <select value={sender} onChange={(event) => setSender(event.target.value)}>
+            <option value="">Все отправители</option>
+            {senders.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
           <select value={status} onChange={(event) => setStatus(event.target.value)}>
             {STATUS_FILTERS.map((item) => (
               <option key={item.value || "all"} value={item.value}>
@@ -107,58 +137,76 @@ export function HistoryPanel({ rows }: { rows: HistoryRow[] }) {
               </option>
             ))}
           </select>
-          <select value={source} onChange={(event) => setSource(event.target.value)}>
-            <option value="">Все источники</option>
-            <option value="restore">Unisender</option>
-            <option value="worker">Отправка</option>
-          </select>
         </div>
         <button className="btn btn-secondary" type="button" onClick={exportCsv}>
           Скачать CSV ({filtered.length})
         </button>
       </div>
       <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-        Показано {filtered.length.toLocaleString("ru-RU")} из{" "}
-        {rows.length.toLocaleString("ru-RU")}. Это журнал событий, не текущая
-        очередь отправки.
+        {filtered.length.toLocaleString("ru-RU")} писем
+        {groups.length > 0
+          ? `, ${groups.length.toLocaleString("ru-RU")} по отправителю`
+          : ""}
+        . Это не очередь для «Запустить».
       </p>
       {filtered.length === 0 ? (
         <div className="empty">По этому фильтру ничего нет.</div>
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Когда</th>
-              <th>Адрес</th>
-              <th>Статус</th>
-              <th>Источник</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.slice(0, 500).map((row) => (
-              <tr key={row.id}>
-                <td className="muted">{row.sentAt}</td>
-                <td>
-                  <strong>{row.email}</strong>
-                  {row.label ? (
-                    <div className="muted" style={{ fontSize: "0.85rem" }}>
-                      {row.label}
-                    </div>
-                  ) : null}
-                  {row.error ? (
-                    <div className="muted" style={{ fontSize: "0.85rem" }}>
-                      {row.error}
-                    </div>
-                  ) : null}
-                </td>
-                <td>{row.statusLabel}</td>
-                <td className="muted">
-                  {row.source === "restore" ? "Unisender" : "Отправка"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        groups.map(([rowSender, days]) => {
+          const senderCount = [...days.values()].reduce((sum, items) => sum + items.length, 0);
+          return (
+            <section key={rowSender} className="stack">
+              <h2 style={{ fontSize: "1.05rem", margin: 0 }}>
+                {rowSender}
+                <span className="muted" style={{ fontWeight: 500 }}>
+                  {" "}
+                  · {senderCount.toLocaleString("ru-RU")}
+                </span>
+              </h2>
+              {[...days.entries()].map(([day, items]) => (
+                <div key={`${rowSender}-${day}`} className="stack">
+                  <h3 className="muted" style={{ fontSize: "0.92rem", margin: 0, fontWeight: 600 }}>
+                    {day} · {items.length.toLocaleString("ru-RU")}
+                  </h3>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Когда</th>
+                        <th>Адрес</th>
+                        <th>Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((row) => {
+                        if (shown >= 500) return null;
+                        shown += 1;
+                        return (
+                          <tr key={row.id}>
+                            <td className="muted">{row.sentAt}</td>
+                            <td>
+                              <strong>{row.email}</strong>
+                              {row.label ? (
+                                <div className="muted" style={{ fontSize: "0.85rem" }}>
+                                  {row.label}
+                                </div>
+                              ) : null}
+                              {row.error ? (
+                                <div className="muted" style={{ fontSize: "0.85rem" }}>
+                                  {row.error}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td>{row.statusLabel}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </section>
+          );
+        })
       )}
       {filtered.length > 500 ? (
         <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>

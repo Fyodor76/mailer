@@ -42,7 +42,7 @@ export function CampaignTabs({
           className={`tab ${tab === "history" ? "tab-active" : ""}`}
           onClick={() => setTab("history")}
         >
-          История
+          Отправки
         </button>
         <Link href={`/campaigns/${campaignId}/report`} className="tab tab-link">
           Полный отчёт

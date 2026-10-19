@@ -153,7 +153,7 @@ export default async function CampaignPage({ params, searchParams }: Props) {
           <div>
             <h2 style={{ fontSize: "1.2rem" }}>Получатели</h2>
             <p className="muted" style={{ margin: "0.2rem 0 0", fontSize: "0.82rem" }}>
-              Общая база: ожидающие и уже отправленные вместе. Повторно уйдут только «Ожидает».
+              Текущая база для запуска. Уже ушедшие письма лежат во вкладке «Отправки» и сгруппированы по отправителю.
             </p>
           </div>
           <span className="muted" style={{ fontSize: "0.85rem" }}>
@@ -274,7 +274,6 @@ export default async function CampaignPage({ params, searchParams }: Props) {
             pendingCount={stats.pending}
             failedCount={errors}
             hasSubject={Boolean(campaign.subject.trim())}
-            canRestore={Boolean(campaign.startedAt)}
           />
         </div>
 
@@ -292,7 +291,12 @@ export default async function CampaignPage({ params, searchParams }: Props) {
                 status: event.status,
                 statusLabel: recipientStatusLabel(event.status),
                 error: event.error,
-                source: event.source,
+                fromEmail: event.fromEmail || campaign.provider?.fromEmail || "",
+                day: event.sentAt.toLocaleDateString("ru-RU", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                }),
                 sentAt: formatDate(event.sentAt),
               }))}
             />

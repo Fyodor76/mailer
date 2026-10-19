@@ -95,6 +95,7 @@ async function processCampaign(
   );
 
   const now = new Date();
+  const fromEmail = campaign.provider?.fromEmail ?? null;
   const events: {
     campaignId: string;
     email: string;
@@ -102,6 +103,7 @@ async function processCampaign(
     status: "FAILED" | "SENT";
     error: string | null;
     providerJobId: string | null;
+    fromEmail: string | null;
     sentAt: Date;
     source: string;
   }[] = [];
@@ -128,6 +130,7 @@ async function processCampaign(
         status: "FAILED",
         error,
         providerJobId: result.jobId ?? null,
+        fromEmail,
         sentAt: now,
         source: "worker",
       });
@@ -146,6 +149,7 @@ async function processCampaign(
             status: "FAILED",
             error: failReason,
             providerJobId: result.jobId ?? null,
+            fromEmail,
             sentAt: now,
             source: "worker",
           });
@@ -167,6 +171,7 @@ async function processCampaign(
             status: "SENT",
             error: null,
             providerJobId: result.jobId ?? null,
+            fromEmail,
             sentAt: now,
             source: "worker",
           });
@@ -188,6 +193,7 @@ async function processCampaign(
           status: "FAILED",
           error: unknown,
           providerJobId: result.jobId ?? null,
+          fromEmail,
           sentAt: now,
           source: "worker",
         });
