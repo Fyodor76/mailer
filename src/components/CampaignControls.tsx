@@ -517,9 +517,12 @@ export function CampaignControls({
             name="replace"
             disabled={!canEdit || pending}
             style={{ width: "auto" }}
-            defaultChecked={recipientCount > 0}
           />
-          Заменить текущую базу
+          Заменить ожидающие адреса
+          <span className="muted" style={{ fontSize: "0.82rem" }}>
+            Уже отправленные не удаляются. Сейчас в базе{" "}
+            {recipientCount.toLocaleString("ru-RU")}
+          </span>
         </label>
       </form>
 

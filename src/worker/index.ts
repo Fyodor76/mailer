@@ -95,9 +95,18 @@ async function processCampaign(
   );
 
   const now = new Date();
+  const events: {
+    campaignId: string;
+    email: string;
+    label: string | null;
+    status: "FAILED" | "SENT";
+    error: string | null;
+    providerJobId: string | null;
+    sentAt: Date;
+    source: string;
+  }[] = [];
 
   if (!result.ok && Object.keys(failedMap).length === 0 && acceptedSet.size === 0) {
-    // whole request failed — mark batch as failed
     const error = result.error || "Send failed";
     await prisma.recipient.updateMany({
       where: { id: { in: batch.map((r) => r.id) } },
@@ -111,6 +120,18 @@ async function processCampaign(
       where: { id: campaign.id },
       data: { errorMessage: error.slice(0, 500) },
     });
+    for (const recipient of batch) {
+      events.push({
+        campaignId: campaign.id,
+        email: recipient.email,
+        label: recipient.label,
+        status: "FAILED",
+        error,
+        providerJobId: result.jobId ?? null,
+        sentAt: now,
+        source: "worker",
+      });
+    }
     console.error(`[worker] campaign ${campaign.id} send failed:`, error);
   } else {
     await Promise.all(
@@ -118,6 +139,16 @@ async function processCampaign(
         const key = r.email.toLowerCase();
         const failReason = failedMap[r.email] || failedMap[key];
         if (failReason) {
+          events.push({
+            campaignId: campaign.id,
+            email: r.email,
+            label: r.label,
+            status: "FAILED",
+            error: failReason,
+            providerJobId: result.jobId ?? null,
+            sentAt: now,
+            source: "worker",
+          });
           return prisma.recipient.update({
             where: { id: r.id },
             data: {
@@ -128,8 +159,17 @@ async function processCampaign(
             },
           });
         }
-        // accepted or assumed sent if request ok and not in failed
         if (acceptedSet.has(key) || result.ok) {
+          events.push({
+            campaignId: campaign.id,
+            email: r.email,
+            label: r.label,
+            status: "SENT",
+            error: null,
+            providerJobId: result.jobId ?? null,
+            sentAt: now,
+            source: "worker",
+          });
           return prisma.recipient.update({
             where: { id: r.id },
             data: {
@@ -140,17 +180,32 @@ async function processCampaign(
             },
           });
         }
+        const unknown = result.error || "Unknown";
+        events.push({
+          campaignId: campaign.id,
+          email: r.email,
+          label: r.label,
+          status: "FAILED",
+          error: unknown,
+          providerJobId: result.jobId ?? null,
+          sentAt: now,
+          source: "worker",
+        });
         return prisma.recipient.update({
           where: { id: r.id },
           data: {
             status: "FAILED",
-            error: result.error || "Unknown",
+            error: unknown,
             providerJobId: result.jobId,
             sentAt: now,
           },
         });
       }),
     );
+  }
+
+  if (events.length > 0) {
+    await prisma.sendEvent.createMany({ data: events });
   }
 
   // re-check if campaign still running (may have been paused)

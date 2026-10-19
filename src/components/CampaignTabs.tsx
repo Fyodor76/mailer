@@ -8,10 +8,17 @@ type Props = {
   summary: ReactNode;
   setup: ReactNode;
   analytics: ReactNode;
+  history: ReactNode;
 };
 
-export function CampaignTabs({ campaignId, summary, setup, analytics }: Props) {
-  const [tab, setTab] = useState<"setup" | "analytics">("setup");
+export function CampaignTabs({
+  campaignId,
+  summary,
+  setup,
+  analytics,
+  history,
+}: Props) {
+  const [tab, setTab] = useState<"setup" | "analytics" | "history">("setup");
 
   return (
     <div className="stack">
@@ -30,6 +37,13 @@ export function CampaignTabs({ campaignId, summary, setup, analytics }: Props) {
         >
           Аналитика
         </button>
+        <button
+          type="button"
+          className={`tab ${tab === "history" ? "tab-active" : ""}`}
+          onClick={() => setTab("history")}
+        >
+          История
+        </button>
         <Link href={`/campaigns/${campaignId}/report`} className="tab tab-link">
           Полный отчёт
         </Link>
@@ -40,8 +54,10 @@ export function CampaignTabs({ campaignId, summary, setup, analytics }: Props) {
           {summary}
           {setup}
         </>
-      ) : (
+      ) : tab === "analytics" ? (
         analytics
+      ) : (
+        history
       )}
     </div>
   );

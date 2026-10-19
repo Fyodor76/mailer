@@ -62,7 +62,9 @@ export async function importRecipientsFromFormData(
   }
 
   if (replace) {
-    await prisma.recipient.deleteMany({ where: { campaignId } });
+    await prisma.recipient.deleteMany({
+      where: { campaignId, status: "PENDING" },
+    });
   }
 
   try {
@@ -83,12 +85,19 @@ export async function importRecipientsFromFormData(
   }
 
   const count = await prisma.recipient.count({ where: { campaignId } });
+  const sentCount = await prisma.recipient.count({
+    where: { campaignId, status: { not: "PENDING" } },
+  });
   await prisma.campaign.update({
     where: { id: campaignId },
     data: {
       status:
-        count > 0 && campaign.subject.trim() ? "READY" : "DRAFT",
-      finishedAt: null,
+        campaign.status === "PAUSED"
+          ? "PAUSED"
+          : count > 0 && campaign.subject.trim()
+            ? "READY"
+            : "DRAFT",
+      finishedAt: sentCount > 0 ? campaign.finishedAt : null,
       errorMessage: null,
     },
   });

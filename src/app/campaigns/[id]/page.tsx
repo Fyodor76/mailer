@@ -57,11 +57,18 @@ export default async function CampaignPage({ params, searchParams }: Props) {
   });
   if (!campaign) notFound();
 
-  const grouped = await prisma.recipient.groupBy({
-    by: ["status"],
-    where: { campaignId: id },
-    _count: true,
-  });
+  const [grouped, events] = await Promise.all([
+    prisma.recipient.groupBy({
+      by: ["status"],
+      where: { campaignId: id },
+      _count: true,
+    }),
+    prisma.sendEvent.findMany({
+      where: { campaignId: id },
+      orderBy: { sentAt: "desc" },
+      take: 400,
+    }),
+  ]);
 
   const stats = {
     total: 0,
@@ -261,6 +268,7 @@ export default async function CampaignPage({ params, searchParams }: Props) {
             pendingCount={stats.pending}
             failedCount={errors}
             hasSubject={Boolean(campaign.subject.trim())}
+            canRestore={Boolean(campaign.startedAt)}
           />
         </div>
 
@@ -269,6 +277,51 @@ export default async function CampaignPage({ params, searchParams }: Props) {
           summary={summary}
           setup={setup}
           analytics={analytics}
+          history={
+            <div className="panel">
+              {events.length === 0 ? (
+                <div className="empty">
+                  История появится после отправки. Старые адреса, стёртые
+                  заменой базы, можно вернуть кнопкой «Вернуть отправленные».
+                </div>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Когда</th>
+                      <th>Адрес</th>
+                      <th>Статус</th>
+                      <th>Источник</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.map((event) => (
+                      <tr key={event.id}>
+                        <td className="muted">{formatDate(event.sentAt)}</td>
+                        <td>
+                          <strong>{event.email}</strong>
+                          {event.label ? (
+                            <div className="muted" style={{ fontSize: "0.85rem" }}>
+                              {event.label}
+                            </div>
+                          ) : null}
+                          {event.error ? (
+                            <div className="muted" style={{ fontSize: "0.85rem" }}>
+                              {event.error}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>{recipientStatusLabel(event.status)}</td>
+                        <td className="muted">
+                          {event.source === "restore" ? "Unisender" : "Отправка"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          }
         />
       </main>
     </>

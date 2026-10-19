@@ -77,8 +77,27 @@ model Campaign {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   recipients Recipient[]
+  sendEvents SendEvent[]
 
   @@index([userId])
+}
+
+model SendEvent {
+  id            String          @id @default(cuid())
+  email         String
+  label         String?
+  status        RecipientStatus
+  error         String?
+  providerJobId String?
+  source        String          @default("worker")
+  sentAt        DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, sentAt])
+  @@index([campaignId, email])
 }
 
 model User {
