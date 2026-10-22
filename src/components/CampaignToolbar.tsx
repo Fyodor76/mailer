@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   pauseCampaignAction,
   resetFailedAction,
+  requeueSentAction,
   startCampaignAction,
   deleteCampaignAction,
 } from "@/app/actions";
@@ -36,6 +37,7 @@ type ToolbarProps = {
   status: string;
   pendingCount: number;
   failedCount: number;
+  sentCount: number;
   hasSubject: boolean;
 };
 
@@ -44,6 +46,7 @@ export function CampaignToolbar({
   status,
   pendingCount,
   failedCount,
+  sentCount,
   hasSubject,
 }: ToolbarProps) {
   const [err, setErr] = useState<string | null>(null);
@@ -51,8 +54,8 @@ export function CampaignToolbar({
   const toast = useToast();
 
   function run(
-    fn: () => Promise<{ error?: string; ok?: boolean } | void>,
-    okMessage: string,
+    fn: () => Promise<{ error?: string; ok?: boolean; count?: number } | void>,
+    okMessage: string | ((res: { count?: number }) => string),
   ) {
     startTransition(async () => {
       setErr(null);
@@ -62,7 +65,11 @@ export function CampaignToolbar({
         toast.error(res.error);
         return;
       }
-      toast.success(okMessage);
+      const message =
+        typeof okMessage === "function"
+          ? okMessage(res && "count" in res ? res : {})
+          : okMessage;
+      toast.success(message);
     });
   }
 
@@ -77,12 +84,16 @@ export function CampaignToolbar({
 
   const showStartButton = status !== "RUNNING";
   const canDelete = status !== "RUNNING";
+  const canResend =
+    sentCount > 0 && pendingCount === 0 && status !== "RUNNING";
 
   let startHint = "";
   if (showStartButton && !canStart) {
     if (!hasSubject) startHint = "Сначала укажите тему письма";
     else if (pendingCount === 0 && failedCount > 0)
       startHint = "Все адреса с ошибкой — нажмите «Повторить ошибки»";
+    else if (pendingCount === 0 && sentCount > 0)
+      startHint = "Все уже отправлены — нажмите «Отправить снова»";
     else if (pendingCount === 0)
       startHint = "Сначала сохраните базу адресов";
   }
@@ -119,6 +130,31 @@ export function CampaignToolbar({
             }
           >
             Пауза
+          </button>
+        ) : null}
+
+        {canResend ? (
+          <button
+            className="btn btn-secondary"
+            type="button"
+            disabled={pending}
+            title="Вернуть доставленные адреса в очередь и разослать снова"
+            onClick={() => {
+              if (
+                !confirm(
+                  "Отправить это письмо снова всем уже доставленным адресам? История прошлых отправок сохранится во вкладке «Отправки».",
+                )
+              ) {
+                return;
+              }
+              run(
+                () => requeueSentAction(campaignId),
+                (res) =>
+                  `В очередь: ${res.count ?? sentCount}. Можно нажать «Запустить»`,
+              );
+            }}
+          >
+            Отправить снова
           </button>
         ) : null}
 

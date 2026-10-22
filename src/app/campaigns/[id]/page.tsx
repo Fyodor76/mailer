@@ -273,6 +273,7 @@ export default async function CampaignPage({ params, searchParams }: Props) {
             status={campaign.status}
             pendingCount={stats.pending}
             failedCount={errors}
+            sentCount={sentOut}
             hasSubject={Boolean(campaign.subject.trim())}
           />
         </div>

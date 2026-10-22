@@ -463,6 +463,50 @@ export async function resetFailedAction(campaignId: string) {
   return { ok: true };
 }
 
+/** Вернуть уже отправленные адреса в очередь — чтобы разослать это же письмо снова. История в «Отправках» не трогается. */
+export async function requeueSentAction(campaignId: string) {
+  const user = await requireAppUser();
+  const campaign = await getOwnedCampaign(user.id, campaignId);
+  if (!campaign) return { error: "Не найдена" };
+  if (campaign.status === "RUNNING") {
+    return { error: "Сначала поставьте на паузу" };
+  }
+
+  const result = await prisma.recipient.updateMany({
+    where: {
+      campaignId,
+      status: { in: ["SENT", "DELIVERED", "OPENED", "CLICKED", "SKIPPED"] },
+    },
+    data: {
+      status: "PENDING",
+      error: null,
+      providerJobId: null,
+      sentAt: null,
+      deliveryStatus: null,
+      deliveredAt: null,
+      openedAt: null,
+    },
+  });
+
+  if (result.count === 0) {
+    return { error: "Нет отправленных адресов для повторной рассылки" };
+  }
+
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: {
+      status: "READY",
+      startedAt: null,
+      finishedAt: null,
+      errorMessage: null,
+    },
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/report`);
+  return { ok: true, count: result.count };
+}
+
 export async function deleteCampaignAction(campaignId: string) {
   const user = await requireAppUser();
   const campaign = await getOwnedCampaign(user.id, campaignId);
